@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Better Dictation",
+  "version": "0.1.0",
+  "identifier": "com.betterdictation.app",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "SteelArchadian",
+    "shortDescription": "Local, private live dictation for Windows",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/encoder.onnx": "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/encoder.onnx",
+      "../models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/decoder.onnx": "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/decoder.onnx",
+      "../models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/joiner.onnx": "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/joiner.onnx",
+      "../models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/tokens.txt": "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/tokens.txt",
+      "../models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/README.md": "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/README.md",
+      "../models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/encoder.int8.onnx": "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/encoder.int8.onnx",
+      "../models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/decoder.int8.onnx": "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/decoder.int8.onnx",
+      "../models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/joiner.int8.onnx": "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/joiner.int8.onnx",
+      "../models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/tokens.txt": "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/tokens.txt",
+      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "template": "./windows/installer.nsi",
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "Better Dictation"
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none;
+    font: 14px "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; }
+  .pill { --lvl: 0; display: flex; padding: 10px;
+    border-radius: 50%; background: rgba(32, 33, 40, 0.92); color: #eef0f6;
+    border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity .16s ease, transform .16s ease; }
+  .pill.on { opacity: 1; transform: none; }
+  .mic { position: relative; flex: none; width: 48px; height: 48px; border-radius: 50%;
+    display: grid; place-items: center; background: linear-gradient(135deg, #5b8cff, #7a4dff);
+    box-shadow: 0 0 calc(4px + var(--lvl) * 26px) calc(var(--lvl) * 8px) rgba(110, 120, 255, calc(0.25 + var(--lvl) * 0.6)); }
+  .ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(140, 150, 255, .55);
+    transform: scale(calc(1 + var(--lvl) * 0.35)); opacity: calc(var(--lvl) * 1.2); }
+  .mic svg { width: 24px; height: 24px; }
+</style>
+</head>
+<body>
+  <div class="pill" id="pill">
+    <div class="mic">
+      <div class="ring"></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+        <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" stroke="none"/>
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/>
+      </svg>
+    </div>
+  </div>
+<script>
+  const pill = document.getElementById('pill');
+  const { listen } = window.__TAURI__.event;
+  let target = 0, shown = 0, on = false;
+
+  listen('mic-level', e => { target = e.payload; });
+  listen('listening', e => {
+    on = e.payload;
+    pill.classList.toggle('on', on);
+    if (on) { target = shown = 0; requestAnimationFrame(frame); }
+  });
+
+  // Rise fast, fall slowly, so the glow follows speech without flicker. Idle while hidden.
+  function frame() {
+    shown += (target - shown) * (target > shown ? 0.5 : 0.12);
+    pill.style.setProperty('--lvl', shown.toFixed(3));
+    if (on) requestAnimationFrame(frame);
+  }
+</script>
+</body>
+</html>

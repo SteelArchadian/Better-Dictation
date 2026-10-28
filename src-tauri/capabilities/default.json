@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Bubble and settings windows",
+  "windows": ["bubble", "settings"],
+  "permissions": ["core:default"]
+}

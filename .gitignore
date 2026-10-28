@@ -1,0 +1,8 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+models/
+
+# Working notes for this PC, not for the public repo
+NOTES.md
+SPEC.md
