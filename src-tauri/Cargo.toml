@@ -1,6 +1,6 @@
 [package]
 name = "better-dictation"
-version = "0.1.0"
+version = "0.1.1"
 description = "Better Dictation - local, live speech-to-text that replaces Win+H"
 edition = "2024"
 
@@ -15,6 +15,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["time"] }
 cpal = "0.15"
 windows = { version = "0.61", features = [
     "Win32_Foundation",

@@ -7,6 +7,7 @@ mod overlay;
 mod refine;
 mod settings;
 mod typing;
+mod update;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -123,7 +124,7 @@ fn open_settings(app: &AppHandle) {
     }
     let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Better Dictation Settings")
-        .inner_size(480.0, 400.0)
+        .inner_size(480.0, 560.0)
         .resizable(false)
         .center()
         .build();
@@ -198,6 +199,7 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_enabled,
@@ -205,7 +207,11 @@ pub fn run() {
             set_accuracy,
             begin_capture,
             cancel_capture,
-            reset_shortcut
+            reset_shortcut,
+            update::update_info,
+            update::update_check,
+            update::update_install,
+            update::whats_new
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -226,6 +232,8 @@ pub fn run() {
             let toggle = MenuItem::with_id(app, "toggle", "Start dictation", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
+            // Added to the top of the menu only when an update is found (update.rs).
+            let update_item = MenuItem::with_id(app, "update", "Update…", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let menu = Menu::with_items(app, &[&toggle, &settings_item, &sep, &quit])?;
             let menu_tx = tx.clone();
@@ -238,7 +246,7 @@ pub fn run() {
                     "toggle" => {
                         let _ = menu_tx.send(Event::Toggle);
                     }
-                    "settings" => open_settings(app),
+                    "settings" | "update" => open_settings(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -248,6 +256,10 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            update::start(handle.clone(), menu, update_item);
+            if update::just_updated(&handle) {
+                open_settings(&handle);
+            }
 
             std::thread::Builder::new()
                 .name("controller".into())

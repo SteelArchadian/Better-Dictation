@@ -6,3 +6,6 @@ models/
 # Working notes for this PC, not for the public repo
 NOTES.md
 SPEC.md
+
+# Release builds (installers are hundreds of MB; the GitHub release holds them)
+release/*/
