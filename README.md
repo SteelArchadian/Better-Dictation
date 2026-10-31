@@ -48,7 +48,7 @@ folders); they come from the sherpa-onnx `asr-models` release.
 
 ## Licence
 
-MIT for the app's code. The bundled speech models have their own licences; see
+GPL-3.0 for the app's code. The bundled speech models have their own licences; see
 THIRD-PARTY-NOTICES.md.
 
 Made with AI assistance.
