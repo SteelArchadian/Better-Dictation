@@ -11,6 +11,7 @@ audio ever leaves it.
   a few words behind the cursor. It never rewinds more than a few words, and only changes a word
   once it is sure. Auto (default) runs it only if your PC keeps up; it can also be set to Always or Off.
 - **Clear numbers as digits.** "thirty five" becomes 35, "twenty twenty six" becomes 2026.
+- **Start with Windows.** Optional toggle in Settings; it opens straight into the tray.
 - **Stops when you're done.** Press Esc or the shortcut to stop (the last sentence is kept and
   corrected), or click anywhere or press any key.
 
@@ -31,7 +32,6 @@ Right-click the tray icon for Settings or Exit.
 
 - Text can't be typed into apps running as administrator yet (Windows blocks it). A
   "run as administrator" option is planned.
-- No "start with Windows" option yet.
 - English only.
 
 ## Building
@@ -50,5 +50,3 @@ folders); they come from the sherpa-onnx `asr-models` release.
 
 GPL-3.0 for the app's code. The bundled speech models have their own licences; see
 THIRD-PARTY-NOTICES.md.
-
-Made with AI assistance.

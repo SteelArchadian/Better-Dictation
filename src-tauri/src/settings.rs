@@ -73,11 +73,13 @@ pub struct Settings {
     pub microphone: Option<String>,
     /// Accuracy pass: "off", "auto" (only while the PC keeps up) or "always".
     pub accuracy: String,
+    /// Start with Windows, straight into the tray.
+    pub start_with_windows: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { enabled: true, shortcut: Shortcut::default(), microphone: None, accuracy: "auto".into() }
+        Settings { enabled: true, shortcut: Shortcut::default(), microphone: None, accuracy: "auto".into(), start_with_windows: false }
     }
 }
 

@@ -1,5 +1,6 @@
 mod asr;
 mod audio;
+mod autostart;
 mod hook;
 mod logger;
 mod numbers;
@@ -63,6 +64,7 @@ struct SettingsView {
     microphone: Option<String>,
     microphones: Vec<String>,
     accuracy: String,
+    start_with_windows: bool,
 }
 
 fn view(s: &Settings) -> SettingsView {
@@ -73,6 +75,7 @@ fn view(s: &Settings) -> SettingsView {
         microphone: s.microphone.clone(),
         microphones: audio::list_microphones(),
         accuracy: s.accuracy.clone(),
+        start_with_windows: s.start_with_windows,
     }
 }
 
@@ -80,6 +83,13 @@ fn view(s: &Settings) -> SettingsView {
 fn set_accuracy(state: State<Shared>, accuracy: String) {
     refine::MODE.store(settings::accuracy_mode(&accuracy), Ordering::SeqCst);
     state.update(|s| s.accuracy = accuracy);
+}
+
+#[tauri::command]
+fn set_start_with_windows(state: State<Shared>, enabled: bool) -> Result<(), String> {
+    autostart::set(enabled).map_err(|e| format!("couldn't change the startup setting: {e}"))?;
+    state.update(|s| s.start_with_windows = enabled);
+    Ok(())
 }
 
 #[tauri::command]
@@ -205,6 +215,7 @@ pub fn run() {
             set_enabled,
             set_microphone,
             set_accuracy,
+            set_start_with_windows,
             begin_capture,
             cancel_capture,
             reset_shortcut,
@@ -221,6 +232,12 @@ pub fn run() {
             logger::log(&format!("starting; shortcut {}", s.shortcut.label()));
 
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
+            // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
+            if s.start_with_windows {
+                if let Err(e) = autostart::set(true) {
+                    logger::log(&format!("startup entry failed: {e}"));
+                }
+            }
             refine::MODE.store(settings::accuracy_mode(&s.accuracy), Ordering::SeqCst);
             hook::set_shortcut(s.shortcut);
             let (tx, rx) = mpsc::channel();
