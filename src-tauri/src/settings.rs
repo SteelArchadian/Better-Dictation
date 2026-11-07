@@ -87,7 +87,7 @@ impl Default for Settings {
             microphone: None,
             accuracy: "auto".into(),
             start_with_windows: false,
-            start_sound: "chime".into(),
+            start_sound: "drop".into(),
         }
     }
 }

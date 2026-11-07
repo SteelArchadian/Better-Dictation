@@ -1,6 +1,6 @@
 [package]
 name = "better-dictation"
-version = "0.1.3"
+version = "0.1.4"
 description = "Better Dictation - local, live speech-to-text that replaces Win+H"
 edition = "2024"
 

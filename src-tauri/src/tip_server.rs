@@ -25,7 +25,11 @@ use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId};
 use windows::core::{PCWSTR, PWSTR, w};
 
+// Tests use their own pipe so a running Better Dictation can't answer in place of the test's server.
+#[cfg(not(test))]
 const PIPE: PCWSTR = w!(r"\\.\pipe\BetterDictationTip");
+#[cfg(test)]
+const PIPE: PCWSTR = w!(r"\\.\pipe\BetterDictationTipTest");
 const ANSWER_WITHIN: Duration = Duration::from_millis(600);
 
 type Job = (Vec<u8>, Sender<bool>);
@@ -181,7 +185,7 @@ mod tests {
     fn a_connected_service_receives_the_edit_and_its_answer_comes_back() {
         start();
         let mut pipe = loop {
-            if let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).open(r"\\.\pipe\BetterDictationTip") {
+            if let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).open(r"\\.\pipe\BetterDictationTipTest") {
                 break f;
             }
             std::thread::sleep(Duration::from_millis(50));
