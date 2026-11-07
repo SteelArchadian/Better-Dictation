@@ -75,11 +75,20 @@ pub struct Settings {
     pub accuracy: String,
     /// Start with Windows, straight into the tray.
     pub start_with_windows: bool,
+    /// Cue played when dictation turns on: a name from sound::NAMES, or "off".
+    pub start_sound: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { enabled: true, shortcut: Shortcut::default(), microphone: None, accuracy: "auto".into(), start_with_windows: false }
+        Settings {
+            enabled: true,
+            shortcut: Shortcut::default(),
+            microphone: None,
+            accuracy: "auto".into(),
+            start_with_windows: false,
+            start_sound: "chime".into(),
+        }
     }
 }
 

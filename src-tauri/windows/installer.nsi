@@ -882,6 +882,15 @@ Section Uninstall
 
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
+  ; Take the text service (input method) out of Windows first. This asks for administrator approval,
+  ; and is skipped if it was never installed.
+  SetRegView 64
+  ReadRegStr $0 HKLM "SOFTWARE\Classes\CLSID\{B7E2C1A4-5D3F-4C8E-9A61-0D2F7B3E8C15}\InprocServer32" ""
+  ${If} $0 != ""
+    ExecShellWait "runas" "$INSTDIR\${MAINBINARYNAME}.exe" "--tip-remove" SW_HIDE
+  ${EndIf}
+  SetRegView 32
+
   ; Delete the app directory and its content from disk
   ; Copy main executable
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"

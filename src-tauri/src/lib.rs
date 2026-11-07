@@ -7,6 +7,9 @@ mod numbers;
 mod overlay;
 mod refine;
 mod settings;
+mod sound;
+mod tip_reg;
+mod tip_server;
 mod typing;
 mod update;
 
@@ -65,6 +68,8 @@ struct SettingsView {
     microphones: Vec<String>,
     accuracy: String,
     start_with_windows: bool,
+    start_sound: String,
+    sounds: Vec<&'static str>,
 }
 
 fn view(s: &Settings) -> SettingsView {
@@ -76,7 +81,45 @@ fn view(s: &Settings) -> SettingsView {
         microphones: audio::list_microphones(),
         accuracy: s.accuracy.clone(),
         start_with_windows: s.start_with_windows,
+        start_sound: s.start_sound.clone(),
+        sounds: sound::NAMES.to_vec(),
     }
+}
+
+#[derive(Serialize)]
+struct TipStatus {
+    installed: bool,
+    /// Apps that currently have the text service loaded and connected.
+    connected: usize,
+}
+
+fn tip_state() -> TipStatus {
+    TipStatus { installed: tip_reg::installed(), connected: tip_server::connected() }
+}
+
+#[tauri::command]
+fn tip_status() -> TipStatus {
+    tip_state()
+}
+
+#[tauri::command]
+async fn tip_install() -> Result<TipStatus, String> {
+    tauri::async_runtime::spawn_blocking(tip_reg::install).await.map_err(|e| e.to_string())??;
+    logger::log("text service installed");
+    Ok(tip_state())
+}
+
+#[tauri::command]
+async fn tip_remove() -> Result<TipStatus, String> {
+    tauri::async_runtime::spawn_blocking(tip_reg::remove).await.map_err(|e| e.to_string())??;
+    logger::log("text service removed");
+    Ok(tip_state())
+}
+
+#[tauri::command]
+fn set_start_sound(state: State<Shared>, sound: String) {
+    sound::play(&sound);
+    state.update(|s| s.start_sound = sound);
 }
 
 #[tauri::command]
@@ -134,7 +177,7 @@ fn open_settings(app: &AppHandle) {
     }
     let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Better Dictation Settings")
-        .inner_size(480.0, 560.0)
+        .inner_size(480.0, 630.0)
         .resizable(false)
         .center()
         .build();
@@ -156,6 +199,7 @@ fn controller(app: AppHandle, rx: Receiver<Event>, toggle_item: MenuItem<Wry>) {
         let _ = toggle_item.set_text(if on { "Stop dictation" } else { "Start dictation" });
         if on {
             let _ = asr.send(asr::Msg::Begin);
+            sound::play(&shared().get().start_sound);
             audio.start(shared().get().microphone);
             overlay::show(&app);
         } else {
@@ -204,6 +248,9 @@ fn already_running() -> bool {
 }
 
 pub fn run() {
+    if let Some(code) = tip_reg::handle_args() {
+        std::process::exit(code);
+    }
     if already_running() {
         return;
     }
@@ -215,7 +262,11 @@ pub fn run() {
             set_enabled,
             set_microphone,
             set_accuracy,
+            set_start_sound,
             set_start_with_windows,
+            tip_status,
+            tip_install,
+            tip_remove,
             begin_capture,
             cancel_capture,
             reset_shortcut,
@@ -232,6 +283,7 @@ pub fn run() {
             logger::log(&format!("starting; shortcut {}", s.shortcut.label()));
 
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
+            tip_server::start();
             // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
             if s.start_with_windows {
                 if let Err(e) = autostart::set(true) {

@@ -12,6 +12,11 @@ audio ever leaves it.
   once it is sure. Auto (default) runs it only if your PC keeps up; it can also be set to Always or Off.
 - **Clear numbers as digits.** "thirty five" becomes 35, "twenty twenty six" becomes 2026.
 - **Start with Windows.** Optional toggle in Settings; it opens straight into the tray.
+- **Start sound.** A short cue plays when dictation turns on; pick one of ten (or Off) in Settings.
+- **Type without key presses (optional).** In Settings, "Type without key presses" adds Better Dictation
+  as an input method (one administrator prompt). Text then goes in as typed text instead of simulated
+  keystrokes, so browser hotkeys and key-bound sites aren't triggered. Without it, or in an app that
+  doesn't load it, the app types keys as before. Remove it the same way (the uninstaller also removes it).
 - **Stops when you're done.** Press Esc or the shortcut to stop (the last sentence is kept and
   corrected), or click anywhere or press any key.
 
