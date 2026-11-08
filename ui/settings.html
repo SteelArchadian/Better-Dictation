@@ -38,6 +38,8 @@
   .banner .notes { margin: 6px 0 0; white-space: pre-wrap; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .6; cursor: default; }
+  .row.vocab { flex-direction: column; align-items: stretch; gap: 8px; }
+  textarea { width: 100%; box-sizing: border-box; resize: vertical; background: var(--field, #1e1f26); color: inherit; border: 1px solid var(--line, #3a3c48); border-radius: 8px; padding: 8px; font: inherit; }
   .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .footer.top h1 { margin: 0; flex: 1; }
   .footer.top { margin-bottom: 12px; }
@@ -110,6 +112,13 @@
       </div>
       <select id="mic"></select>
     </div>
+    <div class="row vocab">
+      <div class="label">
+        <span>Custom words</span>
+        <span class="hint">One per line, spelled how you want it: GECK. If it mishears one, add what it typed: GECK = jeck, gek</span>
+      </div>
+      <textarea id="vocab" rows="3" spellcheck="false" placeholder="GECK = jeck, gek"></textarea>
+    </div>
     <div class="row">
       <div class="label">
         <span>Accuracy pass</span>
@@ -152,6 +161,7 @@
     sound.append(new Option('Off', 'off'));
     for (const name of v.sounds) sound.append(new Option(name[0].toUpperCase() + name.slice(1), name));
     sound.value = v.start_sound;
+    $('vocab').value = v.vocabulary;
   }
 
   function setCapturing(on) {
@@ -182,6 +192,7 @@
       .catch(err => { $('tip').disabled = false; $('tipHint').textContent = String(err); });
   };
   invoke('tip_status').then(renderTip);
+  $('vocab').onchange = e => invoke('set_vocabulary', { text: e.target.value });
   $('sound').onchange = e => invoke('set_start_sound', { sound: e.target.value });
   $('accuracy').onchange = e => invoke('set_accuracy', { accuracy: e.target.value });
   $('reset').onclick = () => invoke('reset_shortcut').then(render);

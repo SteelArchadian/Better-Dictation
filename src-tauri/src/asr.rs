@@ -133,7 +133,7 @@ fn capitalise(w: &str) -> String {
 fn words_of(text: &str) -> Vec<String> {
     // Some models answer in all caps; dictation reads better in normal case.
     let text = if text.chars().any(char::is_lowercase) { text.to_string() } else { text.to_lowercase() };
-    text.split_whitespace().map(str::to_string).collect()
+    crate::vocab::apply(text.split_whitespace().map(str::to_string).collect())
 }
 
 /// Where the already-typed words end in the model's new guess. The model sometimes rewrites

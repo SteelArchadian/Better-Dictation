@@ -77,6 +77,8 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Cue played when dictation turns on: a name from sound::NAMES, or "off".
     pub start_sound: String,
+    /// Custom words, one per line (see vocab.rs).
+    pub vocabulary: String,
 }
 
 impl Default for Settings {
@@ -88,6 +90,7 @@ impl Default for Settings {
             accuracy: "auto".into(),
             start_with_windows: false,
             start_sound: "drop".into(),
+            vocabulary: String::new(),
         }
     }
 }

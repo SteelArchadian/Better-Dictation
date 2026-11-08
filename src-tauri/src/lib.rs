@@ -10,6 +10,7 @@ mod settings;
 mod sound;
 mod tip_reg;
 mod tip_server;
+mod vocab;
 mod typing;
 mod update;
 
@@ -70,6 +71,7 @@ struct SettingsView {
     start_with_windows: bool,
     start_sound: String,
     sounds: Vec<&'static str>,
+    vocabulary: String,
 }
 
 fn view(s: &Settings) -> SettingsView {
@@ -83,6 +85,7 @@ fn view(s: &Settings) -> SettingsView {
         start_with_windows: s.start_with_windows,
         start_sound: s.start_sound.clone(),
         sounds: sound::NAMES.to_vec(),
+        vocabulary: s.vocabulary.clone(),
     }
 }
 
@@ -120,6 +123,12 @@ async fn tip_remove() -> Result<TipStatus, String> {
 fn set_start_sound(state: State<Shared>, sound: String) {
     sound::play(&sound);
     state.update(|s| s.start_sound = sound);
+}
+
+#[tauri::command]
+fn set_vocabulary(state: State<Shared>, text: String) {
+    vocab::set(&text);
+    state.update(|s| s.vocabulary = text);
 }
 
 #[tauri::command]
@@ -177,7 +186,7 @@ fn open_settings(app: &AppHandle) {
     }
     let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Better Dictation Settings")
-        .inner_size(480.0, 630.0)
+        .inner_size(480.0, 730.0)
         .resizable(false)
         .center()
         .build();
@@ -263,6 +272,7 @@ pub fn run() {
             set_microphone,
             set_accuracy,
             set_start_sound,
+            set_vocabulary,
             set_start_with_windows,
             tip_status,
             tip_install,
@@ -282,6 +292,7 @@ pub fn run() {
             let s = settings::load(&path);
             logger::log(&format!("starting; shortcut {}", s.shortcut.label()));
 
+            vocab::set(&s.vocabulary);
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
             tip_server::start();
             std::thread::spawn(tip_reg::activate_if_installed);
