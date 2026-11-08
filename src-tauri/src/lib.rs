@@ -284,6 +284,7 @@ pub fn run() {
 
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
             tip_server::start();
+            std::thread::spawn(tip_reg::activate_if_installed);
             // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
             if s.start_with_windows {
                 if let Err(e) = autostart::set(true) {

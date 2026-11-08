@@ -134,13 +134,23 @@ fn activate() -> Result<(), String> {
                         LANG,
                         &CLSID,
                         &PROFILE,
-                        US_LAYOUT,
+                        // Only keyboard-layout profiles take a layout handle; a text service wants null (anything else is E_INVALIDARG).
+                        HKL(std::ptr::null_mut()),
                         TF_IPPMF_ENABLEPROFILE | TF_IPPMF_FORSESSION | TF_IPPMF_DONTCARECURRENTINPUTLANGUAGE,
                     )
                     .map_err(|e| e.to_string())
             });
         CoUninitialize();
         result
+    }
+}
+
+/// At start-up: the profile is switched on per sign-in session, so turn it back on when the service is installed.
+pub fn activate_if_installed() {
+    if installed() {
+        if let Err(e) = activate() {
+            crate::logger::log(&format!("text service: couldn't switch it on for this session: {e}"));
+        }
     }
 }
 
