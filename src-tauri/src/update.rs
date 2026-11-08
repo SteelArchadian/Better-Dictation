@@ -1,10 +1,10 @@
 //! Updates of Better Dictation itself, from its signed GitHub Releases (the Tauri updater; the endpoint and
 //! public key are in tauri.conf.json, the signing key never leaves the release PC).
 //!
-//! A check runs shortly after start and every 30 minutes. A newer version adds "Update to X.Y.Z" to the tray
-//! menu and a banner with its notes to Settings. Nothing installs until someone presses Update: releases
-//! aren't code-signed, and antivirus rightly distrusts a program that quietly replaces itself. An update
-//! never cuts off dictation: it waits until dictation stops. After it installs, the new version opens
+//! A check runs shortly after start, every 30 minutes, and when "Check for updates" is pressed. A newer
+//! version adds "Update to X.Y.Z" to the tray menu and a banner with its notes to Settings, and installs
+//! by itself (the download is checked against the release signing key first). An update never cuts off
+//! dictation: it waits until dictation stops. After it installs, the new version starts again and opens
 //! Settings once to show what changed.
 
 use std::path::PathBuf;
@@ -72,11 +72,24 @@ pub fn start(app: AppHandle, menu: Menu<Wry>, item: MenuItem<Wry>) {
         tokio::time::sleep(Duration::from_secs(5)).await;
         loop {
             match find(&app).await {
-                Ok(Some(u)) => announce(&app, &menu, &item, Available::from(&u)),
+                Ok(Some(u)) => {
+                    announce(&app, &menu, &item, Available::from(&u));
+                    install_in_background(&app);
+                }
                 Ok(None) => {}
                 Err(e) => crate::logger::log(&e),
             }
             tokio::time::sleep(CHECK_EVERY).await;
+        }
+    });
+}
+
+/// Installs the update that was just found; a failure is logged and the banner's Update button stays for a retry.
+fn install_in_background(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = update_install(app).await {
+            crate::logger::log(&e);
         }
     });
 }
@@ -89,11 +102,15 @@ pub fn update_info() -> Option<Available> {
 /// The "Check for updates" button: None when up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<Option<Available>, String> {
-    Ok(find(&app).await?.map(|u| {
+    let found = find(&app).await?.map(|u| {
         let a = Available::from(&u);
         *FOUND.lock().unwrap_or_else(|e| e.into_inner()) = Some(a.clone());
         a
-    }))
+    });
+    if found.is_some() {
+        install_in_background(&app);
+    }
+    Ok(found)
 }
 
 /// Downloads the newer release, checks its signature and installs it; the app restarts as the new version.

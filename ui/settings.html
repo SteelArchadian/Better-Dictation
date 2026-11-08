@@ -39,10 +39,16 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .6; cursor: default; }
   .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .footer.top h1 { margin: 0; flex: 1; }
+  .footer.top { margin-bottom: 12px; }
 </style>
 </head>
 <body>
-  <h1>Better Dictation</h1>
+  <div class="footer top">
+    <h1>Better Dictation</h1>
+    <span class="hint" id="version"></span>
+    <button id="check">Check for updates</button>
+  </div>
   <div class="card banner" id="update" hidden>
     <div class="head">
       <strong id="updateTitle"></strong>
@@ -118,10 +124,6 @@
   </div>
   <p class="hint">Dictation also stops when you click anywhere, press Esc, or press any other key.
     Stop with Esc or the shortcut to keep the last words; a click or other key drops anything not yet typed.</p>
-  <div class="footer">
-    <span class="hint" id="version"></span>
-    <button id="check">Check for updates</button>
-  </div>
 <script>
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
