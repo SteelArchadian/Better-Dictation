@@ -74,7 +74,7 @@ def private_words():
 def checks():
     """Everything that must pass before a build: no private names in the shipped source, tests green."""
     words = private_words()
-    for root in (os.path.join(TAURI, 'src'), os.path.join(ROOT, 'ui'), os.path.join(ROOT, 'tip', 'src')):
+    for root in (os.path.join(TAURI, 'src'), os.path.join(ROOT, 'ui')):
         for dirpath, _, files in os.walk(root):
             for name in files:
                 path = os.path.join(dirpath, name)
@@ -119,9 +119,6 @@ def main():
     if not os.path.isfile(key):
         sys.exit(f'no signing key at {key}')
     set_version(version)
-    tip = subprocess.run(['cargo', 'build', '--release'], cwd=os.path.join(ROOT, 'tip'), capture_output=True, text=True)
-    if tip.returncode != 0:
-        sys.exit(f'the text service (tip/) failed to build:\n{(tip.stdout + tip.stderr)[-1500:]}')
     env =dict(os.environ, TAURI_SIGNING_PRIVATE_KEY=key, TAURI_SIGNING_PRIVATE_KEY_PASSWORD='')
     log = os.path.join(os.environ.get('TEMP', HERE), f'better-dictation-build-{version}.log')
     print(f'building {version} (log: {log})')

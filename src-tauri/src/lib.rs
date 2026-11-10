@@ -9,7 +9,6 @@ mod refine;
 mod settings;
 mod sound;
 mod tip_reg;
-mod tip_server;
 mod vocab;
 mod typing;
 mod update;
@@ -89,36 +88,6 @@ fn view(s: &Settings) -> SettingsView {
     }
 }
 
-#[derive(Serialize)]
-struct TipStatus {
-    installed: bool,
-    /// Apps that currently have the text service loaded and connected.
-    connected: usize,
-}
-
-fn tip_state() -> TipStatus {
-    TipStatus { installed: tip_reg::installed(), connected: tip_server::connected() }
-}
-
-#[tauri::command]
-fn tip_status() -> TipStatus {
-    tip_state()
-}
-
-#[tauri::command]
-async fn tip_install() -> Result<TipStatus, String> {
-    tauri::async_runtime::spawn_blocking(tip_reg::install).await.map_err(|e| e.to_string())??;
-    logger::log("text service installed");
-    Ok(tip_state())
-}
-
-#[tauri::command]
-async fn tip_remove() -> Result<TipStatus, String> {
-    tauri::async_runtime::spawn_blocking(tip_reg::remove).await.map_err(|e| e.to_string())??;
-    logger::log("text service removed");
-    Ok(tip_state())
-}
-
 #[tauri::command]
 fn set_start_sound(state: State<Shared>, sound: String) {
     sound::play(&sound);
@@ -186,7 +155,7 @@ fn open_settings(app: &AppHandle) {
     }
     let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Better Dictation Settings")
-        .inner_size(480.0, 730.0)
+        .inner_size(480.0, 690.0)
         .resizable(false)
         .center()
         .build();
@@ -274,9 +243,6 @@ pub fn run() {
             set_start_sound,
             set_vocabulary,
             set_start_with_windows,
-            tip_status,
-            tip_install,
-            tip_remove,
             begin_capture,
             cancel_capture,
             reset_shortcut,
@@ -294,8 +260,6 @@ pub fn run() {
 
             vocab::set(&s.vocabulary);
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
-            tip_server::start();
-            std::thread::spawn(tip_reg::activate_if_installed);
             // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
             if s.start_with_windows {
                 if let Err(e) = autostart::set(true) {

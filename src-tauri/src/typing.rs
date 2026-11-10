@@ -34,11 +34,6 @@ fn wait_for_modifiers() {
 pub fn replace(old: &str, new: &str) {
     let same = old.chars().zip(new.chars()).take_while(|(a, b)| a == b).count();
     let erase = old.chars().count() - same;
-    let tail: String = new.chars().skip(same).collect();
-    let erased_units: usize = old.chars().skip(same).map(char::len_utf16).sum();
-    if crate::tip_server::insert(foreground(), erased_units, &tail) {
-        return;
-    }
     if erase > 0 {
         wait_for_modifiers();
         let key = |up: bool| INPUT {
@@ -61,9 +56,6 @@ pub fn replace(old: &str, new: &str) {
 
 pub fn type_text(text: &str) {
     if text.is_empty() {
-        return;
-    }
-    if crate::tip_server::insert(foreground(), 0, text) {
         return;
     }
     wait_for_modifiers();

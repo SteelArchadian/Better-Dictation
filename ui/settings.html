@@ -93,13 +93,6 @@
     </div>
     <div class="row">
       <div class="label">
-        <span>Type without key presses</span>
-        <span class="hint" id="tipHint">Adds Better Dictation as an input method, so text goes in as typed text, not keystrokes (no site hotkeys). Needs administrator approval once.</span>
-      </div>
-      <button id="tip">Install</button>
-    </div>
-    <div class="row">
-      <div class="label">
         <span>Start sound</span>
         <span class="hint">Plays when dictation turns on. Picking one plays it.</span>
       </div>
@@ -175,23 +168,6 @@
   $('autostart').onchange = e => invoke('set_start_with_windows', { enabled: e.target.checked })
     .then(() => { $('startHint').textContent = 'Opens in the tray when you sign in.'; })
     .catch(err => { e.target.checked = !e.target.checked; $('startHint').textContent = String(err); });
-  let tipInstalled = false;
-  function renderTip(s) {
-    tipInstalled = s.installed;
-    $('tip').textContent = s.installed ? 'Remove' : 'Install';
-    $('tip').disabled = false;
-    $('tipHint').textContent = s.installed
-      ? (s.connected > 0 ? `On. Loaded in ${s.connected} open app${s.connected === 1 ? '' : 's'}; apps opened before installing need a restart.`
-        : 'Installed. Restart your apps (or sign out and in) so they pick it up; until then keys are typed.')
-      : 'Adds Better Dictation as an input method, so text goes in as typed text, not keystrokes (no site hotkeys). Needs administrator approval once.';
-  }
-  $('tip').onclick = () => {
-    $('tip').disabled = true;
-    $('tipHint').textContent = 'Waiting for the administrator prompt…';
-    invoke(tipInstalled ? 'tip_remove' : 'tip_install').then(renderTip)
-      .catch(err => { $('tip').disabled = false; $('tipHint').textContent = String(err); });
-  };
-  invoke('tip_status').then(renderTip);
   $('vocab').onchange = e => invoke('set_vocabulary', { text: e.target.value });
   $('sound').onchange = e => invoke('set_start_sound', { sound: e.target.value });
   $('accuracy').onchange = e => invoke('set_accuracy', { accuracy: e.target.value });
