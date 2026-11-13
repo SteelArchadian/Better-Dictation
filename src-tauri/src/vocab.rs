@@ -16,9 +16,25 @@ fn key(word: &str) -> String {
     word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase()
 }
 
+/// Names and terms the models reliably get wrong, so nobody has to add them by hand. The user's
+/// own list comes after and wins on a tie.
+const BUILTIN: &str = "Claude = clawed, cloud code, clod
+Claude Code = clawed code, cloud code
+Anthropic = and tropic, anthropic
+Minecraft = mind craft, mine craft
+Opera GX = opera g x, opera gx
+GitHub = get hub, git hub
+ChatGPT = chat gpt, chat g p t
+OpenAI = open a i, open ai
+TikTok = tick tock, tik tok
+YouTube = you tube
+Discord = this cord
+Wi-Fi = wifi, why fi
+OK = okay";
+
 fn parse(text: &str) -> Vec<Entry> {
     let mut entries = Vec::new();
-    for line in text.lines() {
+    for line in text.lines().chain(BUILTIN.lines()) {
         let (write, heard) = line.split_once('=').unwrap_or((line, ""));
         let write = write.trim();
         if write.is_empty() {
@@ -45,9 +61,6 @@ pub fn set(text: &str) {
 /// Rewrites heard words to the user's spellings, keeping punctuation next to the words.
 pub fn apply(words: Vec<String>) -> Vec<String> {
     let entries = ENTRIES.read().unwrap_or_else(|e| e.into_inner());
-    if entries.is_empty() {
-        return words;
-    }
     let keys: Vec<String> = words.iter().map(|w| key(w)).collect();
     let mut out = Vec::with_capacity(words.len());
     let mut i = 0;
@@ -93,5 +106,6 @@ mod tests {
         assert_eq!(apply(words("a gecko")), words("a gecko"));
         set("");
         assert_eq!(apply(words("geck")), words("geck"));
+        assert_eq!(apply(words("typing into clawed, now")), words("typing into Claude, now"));
     }
 }

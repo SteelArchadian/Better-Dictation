@@ -1,0 +1,33 @@
+[package]
+name = "bd_tip"
+version = "0.1.3"
+description = "Better Dictation text service: lets the tray app insert text without sending key presses"
+edition = "2024"
+
+[lib]
+name = "bd_tip"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_IO",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_TextServices",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "unwind"
+strip = true

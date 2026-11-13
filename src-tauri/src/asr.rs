@@ -120,6 +120,20 @@ impl Writer {
     }
 }
 
+/// A word that cannot end a sentence ("it has.", "is that."). The accuracy model adds a full stop
+/// whenever you pause, even mid-thought, so a stop right after one of these is a pause, not an end.
+fn dangling(w: &str) -> bool {
+    const OPEN: [&str; 29] = [
+        "the", "a", "an", "of", "to", "and", "or", "but", "with", "for", "in", "on", "at", "by", "from", "my",
+        "your", "their", "our", "its", "if", "because", "as", "than", "into", "would", "could", "should", "has",
+    ];
+    const OPEN2: [&str; 5] = ["have", "was", "were", "is", "been"];
+    w.strip_suffix('.').is_some_and(|c| {
+        let c = c.to_lowercase();
+        OPEN.contains(&c.as_str()) || OPEN2.contains(&c.as_str())
+    })
+}
+
 fn is_pronoun_i(w: &str) -> bool {
     let core = w.trim_end_matches([',', '.', '?', '!']);
     core == "i" || core.starts_with("i'")
@@ -174,17 +188,29 @@ trait Output {
     fn replace(&mut self, old: &str, new: &str);
 }
 
-struct Keyboard;
+/// `background`: the control dictation started in, which keeps receiving text whatever has focus.
+struct Keyboard {
+    background: Option<isize>,
+}
 
 impl Output for Keyboard {
     fn focused(&self, window: isize) -> bool {
-        typing::foreground() == window
+        match self.background {
+            Some(target) => typing::alive(target),
+            None => typing::foreground() == window,
+        }
     }
     fn type_text(&mut self, text: &str) {
-        typing::type_text(text);
+        match self.background {
+            Some(target) => typing::type_in(target, text),
+            None => typing::type_text(text),
+        }
     }
     fn replace(&mut self, old: &str, new: &str) {
-        typing::replace(old, new);
+        match self.background {
+            Some(target) => typing::replace_in(target, old, new),
+            None => typing::replace(old, new),
+        }
     }
 }
 
@@ -271,6 +297,8 @@ impl Session {
     /// Types whatever has settled.
     fn update(&mut self, text: &str, now: Instant, flush: bool) {
         let out = self.step(text, now, flush);
+        let tail = self.prev.len().saturating_sub(2);
+        crate::overlay::words(&self.prev[tail..].join(" "));
         self.type_out(out);
     }
 
@@ -323,6 +351,11 @@ impl Session {
         if words.is_empty() || self.broken || !self.out.focused(self.window) {
             // Unsure beats destructive: never erase a sentence because the second pass heard nothing.
             return;
+        }
+        for w in &mut words {
+            if dangling(w) {
+                w.pop();
+            }
         }
         let Some(a) = self.screen.iter().position(|t| t.segment == fix.segment) else { return };
         let mut e = a + self.words_in(fix.segment);
@@ -469,7 +502,8 @@ fn asr_thread(rx: Receiver<Msg>) {
         let Some(r) = &recognizer else { continue };
         match msg {
             Msg::Begin => {
-                session = Some(Session::new(r.create_stream(), Box::new(Keyboard), typing::foreground()))
+                let background = crate::hook::BACKGROUND.load(Ordering::SeqCst).then(typing::focus_target);
+                session = Some(Session::new(r.create_stream(), Box::new(Keyboard { background }), typing::foreground()))
             }
             Msg::Samples(rate, samples) => {
                 let Some(s) = session.as_mut() else { continue };
@@ -540,6 +574,15 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    #[test]
+    fn pauses_mid_thought_get_no_full_stop() {
+        assert!(dangling("has."));
+        assert!(dangling("The."));
+        assert!(!dangling("has"));
+        assert!(!dangling("song."));
+        assert!(!dangling("that."));
+    }
 
     #[test]
     fn formats_sentences() {

@@ -69,6 +69,9 @@ struct SettingsView {
     accuracy: String,
     start_with_windows: bool,
     start_sound: String,
+    start_volume: u8,
+    background: bool,
+    show_words: bool,
     sounds: Vec<&'static str>,
     vocabulary: String,
 }
@@ -83,6 +86,9 @@ fn view(s: &Settings) -> SettingsView {
         accuracy: s.accuracy.clone(),
         start_with_windows: s.start_with_windows,
         start_sound: s.start_sound.clone(),
+        start_volume: s.start_volume,
+        background: s.background,
+        show_words: s.show_words,
         sounds: sound::NAMES.to_vec(),
         vocabulary: s.vocabulary.clone(),
     }
@@ -90,8 +96,33 @@ fn view(s: &Settings) -> SettingsView {
 
 #[tauri::command]
 fn set_start_sound(state: State<Shared>, sound: String) {
-    sound::play(&sound);
+    sound::play(&sound, state.get().start_volume);
     state.update(|s| s.start_sound = sound);
+}
+
+#[tauri::command]
+fn set_start_volume(state: State<Shared>, volume: u8, preview: bool) {
+    let s = state.update(|s| s.start_volume = volume.min(100));
+    if preview {
+        sound::play(&s.start_sound, s.start_volume);
+    }
+}
+
+#[tauri::command]
+fn bubble_trace(msg: String) {
+    logger::trace(&format!("bubble: {msg}"));
+}
+
+#[tauri::command]
+fn set_background(state: State<Shared>, enabled: bool) {
+    hook::BACKGROUND.store(enabled, Ordering::SeqCst);
+    state.update(|s| s.background = enabled);
+}
+
+#[tauri::command]
+fn set_show_words(state: State<Shared>, enabled: bool) {
+    overlay::SHOW_WORDS.store(enabled, Ordering::SeqCst);
+    state.update(|s| s.show_words = enabled);
 }
 
 #[tauri::command]
@@ -169,6 +200,11 @@ fn controller(app: AppHandle, rx: Receiver<Event>, toggle_item: MenuItem<Wry>) {
     let audio = audio::Audio::new(app.clone(), asr.clone());
     let shared = || app.state::<Shared>();
     let mut listening = false;
+    // For "keep typing in the original app": the window dictation started in, and whether the
+    // user is somewhere else now.
+    let mut origin = 0isize;
+    let mut background = false;
+    let mut away = false;
 
     // `clean`: stopped by Esc or the shortcut, which are swallowed, so the sentence can be finished.
     let set_listening = |on: bool, clean: bool| {
@@ -177,22 +213,56 @@ fn controller(app: AppHandle, rx: Receiver<Event>, toggle_item: MenuItem<Wry>) {
         let _ = toggle_item.set_text(if on { "Stop dictation" } else { "Start dictation" });
         if on {
             let _ = asr.send(asr::Msg::Begin);
-            sound::play(&shared().get().start_sound);
+            {
+                let s = shared().get();
+                sound::play(&s.start_sound, s.start_volume);
+            }
             audio.start(shared().get().microphone);
             overlay::show(&app);
         } else {
             audio.stop();
+            {
+                let s = shared().get();
+                sound::play_reversed(&s.start_sound, s.start_volume);
+            }
             let _ = asr.send(asr::Msg::End { clean });
             overlay::hide(&app);
         }
         logger::log(if on { "listening" } else { "stopped" });
     };
 
-    for ev in rx {
+    loop {
+        let ev = match rx.recv_timeout(std::time::Duration::from_millis(250)) {
+            Ok(ev) => ev,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if listening && background {
+                    let fg = typing::foreground();
+                    let now = fg != 0 && fg != origin;
+                    if now != away {
+                        away = now;
+                        overlay::away(&app, away);
+                    }
+                }
+                continue;
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        };
         match ev {
             Event::Toggle => {
-                listening = !listening;
+                // The shortcut pressed in a different app moves dictation there instead of stopping it.
+                let fg = typing::foreground();
+                let restart = listening && background && fg != 0 && fg != origin;
+                if restart {
+                    set_listening(false, true);
+                }
+                listening = restart || !listening;
                 set_listening(listening, true);
+                if listening {
+                    origin = typing::foreground();
+                    background = hook::BACKGROUND.load(Ordering::SeqCst);
+                    away = false;
+                    overlay::away(&app, false);
+                }
             }
             Event::Stop(why) if listening => {
                 logger::log(&format!("stop: {why}"));
@@ -236,11 +306,15 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            bubble_trace,
             get_settings,
             set_enabled,
             set_microphone,
             set_accuracy,
             set_start_sound,
+            set_start_volume,
+            set_background,
+            set_show_words,
             set_vocabulary,
             set_start_with_windows,
             begin_capture,
@@ -256,10 +330,19 @@ pub fn run() {
             logger::init(&app.path().app_log_dir()?);
             let path = settings::path(&app.path().app_config_dir()?);
             let s = settings::load(&path);
-            logger::log(&format!("starting; shortcut {}", s.shortcut.label()));
+            logger::set_debug(app.path().app_config_dir()?.join("debug.on").exists());
+            logger::log(&format!(
+                "starting {}; shortcut {}; debug {}; args {:?}",
+                env!("CARGO_PKG_VERSION"),
+                s.shortcut.label(),
+                logger::debug(),
+                std::env::args().skip(1).collect::<Vec<_>>()
+            ));
 
             vocab::set(&s.vocabulary);
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
+            hook::BACKGROUND.store(s.background, Ordering::SeqCst);
+            overlay::SHOW_WORDS.store(s.show_words, Ordering::SeqCst);
             // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
             if s.start_with_windows {
                 if let Err(e) = autostart::set(true) {

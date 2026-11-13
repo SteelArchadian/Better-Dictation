@@ -77,6 +77,12 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Cue played when dictation turns on: a name from sound::NAMES, or "off".
     pub start_sound: String,
+    /// Level of that cue, 0 to 100 percent.
+    pub start_volume: u8,
+    /// Keep typing into the window dictation started in, even after switching to another app.
+    pub background: bool,
+    /// Show a faint trace of the words being heard inside the bubble's dot.
+    pub show_words: bool,
     /// Custom words, one per line (see vocab.rs).
     pub vocabulary: String,
 }
@@ -90,6 +96,9 @@ impl Default for Settings {
             accuracy: "auto".into(),
             start_with_windows: false,
             start_sound: "drop".into(),
+            start_volume: 100,
+            background: false,
+            show_words: true,
             vocabulary: String::new(),
         }
     }

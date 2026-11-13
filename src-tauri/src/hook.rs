@@ -6,7 +6,7 @@
 //! Events we inject ourselves (typed text, the Start-menu suppressor) are ignored.
 
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 use std::sync::mpsc::Sender;
 
 use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
@@ -32,12 +32,16 @@ use crate::settings::{MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN, Shortcut};
 pub static ENABLED: AtomicBool = AtomicBool::new(true);
 /// Dictation is running: real key presses and clicks stop it.
 pub static LISTENING: AtomicBool = AtomicBool::new(false);
+/// "Keep typing in the original app": only Esc, a right-click, a lone Win tap and the shortcut stop dictation.
+pub static BACKGROUND: AtomicBool = AtomicBool::new(false);
 /// The settings window is waiting for a new shortcut; the next combination is captured.
 pub static CAPTURING: AtomicBool = AtomicBool::new(false);
 
 static SHORTCUT: AtomicU32 = AtomicU32::new(0);
 /// The shortcut's key is held down; its auto-repeats are swallowed instead of toggling again.
 static TRIGGER_HELD: AtomicBool = AtomicBool::new(false);
+/// Where the dot of the bubble is on screen (centre x, y and radius in pixels); a click on it stops dictation.
+pub static DOT: [AtomicI32; 3] = [AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0)];
 static CAPTURE_HELD: AtomicU32 = AtomicU32::new(0);
 static SENDER: OnceLock<Sender<Event>> = OnceLock::new();
 static THREAD_ID: AtomicU32 = AtomicU32::new(0);
@@ -198,8 +202,8 @@ fn on_key(vk: u32, down: bool, up: bool) -> bool {
         }
     }
 
-    if down && LISTENING.load(Ordering::SeqCst) {
-        let esc = vk == VK_ESCAPE.0 as u32;
+    let esc = vk == VK_ESCAPE.0 as u32;
+    if down && LISTENING.load(Ordering::SeqCst) && (esc || !BACKGROUND.load(Ordering::SeqCst)) {
         send(Event::Stop(if esc { "esc".into() } else { format!("key {vk:#04x}") }));
         // Esc only means "stop"; any other key still reaches the app.
         return vk == VK_ESCAPE.0 as u32;
@@ -229,7 +233,14 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
         if code == HC_ACTION as i32 && LISTENING.load(Ordering::SeqCst) {
             let ms = &*(lparam.0 as *const MSLLHOOKSTRUCT);
             let m = wparam.0 as u32;
-            let click = matches!(m, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_XBUTTONDOWN);
+            // Keep-typing mode: only a right-click or a click on the dot stops; other clicks just move around.
+            let click = if BACKGROUND.load(Ordering::SeqCst) {
+                let (dx, dy) = (ms.pt.x - DOT[0].load(Ordering::SeqCst), ms.pt.y - DOT[1].load(Ordering::SeqCst));
+                let r = DOT[2].load(Ordering::SeqCst);
+                m == WM_RBUTTONDOWN || (m == WM_LBUTTONDOWN && dx * dx + dy * dy <= r * r)
+            } else {
+                matches!(m, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_XBUTTONDOWN)
+            };
             if click && ms.flags & LLMHF_INJECTED == 0 {
                 send(Event::Stop("click".into()));
             }

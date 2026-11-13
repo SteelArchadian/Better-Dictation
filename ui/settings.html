@@ -100,6 +100,27 @@
     </div>
     <div class="row">
       <div class="label">
+        <span>Keep typing in the original app</span>
+        <span class="hint">Dictation keeps typing into the box you started in while you use other apps. Only the shortcut stops it.</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="background"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="label">
+        <span>Show words in the bubble</span>
+        <span class="hint">A faint trace of what it hears appears inside the dot while you speak.</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="showWords"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="label">
+        <span>Start sound volume</span>
+        <span class="hint" id="volumeHint"></span>
+      </div>
+      <input type="range" id="volume" min="0" max="100" step="5">
+    </div>
+    <div class="row">
+      <div class="label">
         <span>Microphone</span>
         <span class="hint">Default follows your Windows setting.</span>
       </div>
@@ -149,11 +170,15 @@
     mic.value = v.microphone ?? '';
     $('accuracy').value = v.accuracy;
     $('autostart').checked = v.start_with_windows;
+    $('background').checked = v.background;
+    $('showWords').checked = v.show_words;
     const sound = $('sound');
     sound.innerHTML = '';
     sound.append(new Option('Off', 'off'));
     for (const name of v.sounds) sound.append(new Option(name[0].toUpperCase() + name.slice(1), name));
     sound.value = v.start_sound;
+    $('volume').value = v.start_volume;
+    $('volumeHint').textContent = v.start_volume + '%';
     $('vocab').value = v.vocabulary;
   }
 
@@ -165,11 +190,18 @@
 
   $('enabled').onchange = e => invoke('set_enabled', { enabled: e.target.checked }).then(load);
   $('mic').onchange = e => invoke('set_microphone', { microphone: e.target.value || null });
+  $('showWords').onchange = e => invoke('set_show_words', { enabled: e.target.checked });
+  $('background').onchange = e => invoke('set_background', { enabled: e.target.checked });
   $('autostart').onchange = e => invoke('set_start_with_windows', { enabled: e.target.checked })
     .then(() => { $('startHint').textContent = 'Opens in the tray when you sign in.'; })
     .catch(err => { e.target.checked = !e.target.checked; $('startHint').textContent = String(err); });
   $('vocab').onchange = e => invoke('set_vocabulary', { text: e.target.value });
   $('sound').onchange = e => invoke('set_start_sound', { sound: e.target.value });
+  $('volume').oninput = e => {
+    $('volumeHint').textContent = e.target.value + '%';
+    invoke('set_start_volume', { volume: +e.target.value, preview: false });
+  };
+  $('volume').onchange = e => invoke('set_start_volume', { volume: +e.target.value, preview: true });
   $('accuracy').onchange = e => invoke('set_accuracy', { accuracy: e.target.value });
   $('reset').onclick = () => invoke('reset_shortcut').then(render);
   $('change').onclick = () => {
