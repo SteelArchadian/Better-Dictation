@@ -9,11 +9,11 @@
 //! ever erases more than MAX_REWIND characters, so the text keeps flowing instead of rewinding.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use sherpa_onnx::{OnlineRecognizer, OnlineRecognizerConfig, OnlineStream};
+use sherpa_onnx::{OnlineRecognizer, OnlineRecognizerConfig, OnlineSpeechDenoiser, OnlineSpeechDenoiserConfig, OnlineStream};
 
 use crate::numbers;
 use crate::refine::{self, Refiner};
@@ -29,6 +29,8 @@ const PARTIAL_EVERY: usize = 12;
 /// already be typing, and a fix would land among their words.
 const FINAL_WAIT: Duration = Duration::from_secs(2);
 
+/// Clean the microphone with a small noise-removal model before recognising it.
+pub static DENOISE: AtomicBool = AtomicBool::new(true);
 static NEXT_SEGMENT: AtomicU64 = AtomicU64::new(1);
 
 pub enum Msg {
@@ -45,6 +47,16 @@ pub fn start() -> Sender<Msg> {
         .spawn(move || asr_thread(rx))
         .expect("spawn asr thread");
     tx
+}
+
+fn load_denoiser() -> Option<OnlineSpeechDenoiser> {
+    let model = models_dir()?.join("gtcrn_simple.onnx");
+    let mut config = OnlineSpeechDenoiserConfig::default();
+    config.model.gtcrn.model = Some(model.to_string_lossy().into_owned());
+    config.model.num_threads = 1;
+    let d = OnlineSpeechDenoiser::create(&config);
+    crate::logger::log(if d.is_some() { "noise remover loaded" } else { "noise remover failed to load" });
+    d
 }
 
 /// models\ next to the exe (installed), or in a parent folder (development builds).
@@ -489,6 +501,7 @@ fn asr_thread(rx: Receiver<Msg>) {
         .expect("spawn refine thread");
     // Load up front so the first Win+H starts instantly.
     let recognizer = load();
+    let denoiser = load_denoiser();
     let mut session: Option<Session> = None;
     // Jobs sent to the accuracy pass and not yet answered (across sessions).
     let mut pending = 0usize;
@@ -503,10 +516,24 @@ fn asr_thread(rx: Receiver<Msg>) {
         match msg {
             Msg::Begin => {
                 let background = crate::hook::BACKGROUND.load(Ordering::SeqCst).then(typing::focus_target);
+                if let Some(d) = &denoiser {
+                    d.reset();
+                }
                 session = Some(Session::new(r.create_stream(), Box::new(Keyboard { background }), typing::foreground()))
             }
             Msg::Samples(rate, samples) => {
                 let Some(s) = session.as_mut() else { continue };
+                // Music and room noise out first; the cleaned audio is always at the model's rate.
+                let (rate, samples) = match denoiser.as_ref().filter(|_| DENOISE.load(Ordering::SeqCst)) {
+                    Some(d) => {
+                        let out = d.run(&samples, rate as i32);
+                        (out.sample_rate as u32, out.samples)
+                    }
+                    None => (rate, samples),
+                };
+                if samples.is_empty() {
+                    continue;
+                }
                 while let Ok(fix) = fixes.try_recv() {
                     pending -= 1;
                     s.apply(fix);
@@ -683,6 +710,55 @@ mod tests {
     /// (nothing doubled or dropped), every fix must apply cleanly, and no fix may rewind further
     /// than MAX_REWIND.
     /// `cargo test -- --ignored --nocapture`
+    /// Speech with a made-up "music" bed (chords and a beat) at the same loudness, read with and
+    /// without the noise remover.
+    #[test]
+    #[ignore]
+    fn denoiser_helps_with_music() {
+        let r = load().unwrap();
+        let d = load_denoiser().unwrap();
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../models").join(LIVE_MODEL).join("test_wavs");
+        let w = sherpa_onnx::Wave::read(&dir.join("0.wav").to_string_lossy()).unwrap();
+        let rate = w.sample_rate() as f32;
+        let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+        let n = w.samples().len();
+        let chords = [[220.0f32, 277.2, 329.6], [196.0, 246.9, 293.7], [174.6, 220.0, 261.6], [196.0, 246.9, 392.0]];
+        let mut music: Vec<f32> = (0..n)
+            .map(|i| {
+                let t = i as f32 / rate;
+                let c = chords[(t / 1.5) as usize % 4];
+                let tone: f32 = c.iter().map(|f| (t * f * std::f32::consts::TAU).sin() + 0.3 * (t * f * 2.0 * std::f32::consts::TAU).sin()).sum();
+                let beat = (-((t * 2.0).fract()) * 12.0).exp() * (t * 90.0 * std::f32::consts::TAU).sin() * 2.0;
+                tone + beat
+            })
+            .collect();
+        let k = rms(w.samples()) / rms(&music);
+        music.iter_mut().for_each(|v| *v *= k);
+        let mixed: Vec<f32> = w.samples().iter().zip(&music).map(|(a, b)| a + b).collect();
+        let read = |audio: &[f32], rate: i32| {
+            let s = r.create_stream();
+            for c in audio.chunks(rate as usize * 30 / 1000) {
+                s.accept_waveform(rate, c);
+                drain(&r, &s);
+            }
+            finish(&s, rate as u32);
+            drain(&r, &s);
+            result(&r, &s)
+        };
+        let clean = {
+            d.reset();
+            let mut out = Vec::new();
+            for c in mixed.chunks(rate as usize * 30 / 1000) {
+                out.extend(d.run(c, rate as i32).samples);
+            }
+            out.extend(d.flush().samples);
+            read(&out, d.sample_rate())
+        };
+        println!("clean speech:  {}", read(w.samples(), rate as i32));
+        println!("with music:    {}", read(&mixed, rate as i32));
+        println!("denoised:      {clean}");
+    }
+
     #[test]
     #[ignore]
     fn live_model_on_test_wavs() {

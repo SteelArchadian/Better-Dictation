@@ -68,6 +68,13 @@
   <div class="card">
     <div class="row">
       <div class="label">
+        <span>Ignore background music and noise</span>
+        <span class="hint">Cleans the microphone before it is recognised, so music or fans behind you matter less.</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="reduceNoise"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="label">
         <span>Use the shortcut</span>
         <span class="hint" id="enabledHint"></span>
       </div>
@@ -172,6 +179,7 @@
     $('autostart').checked = v.start_with_windows;
     $('background').checked = v.background;
     $('showWords').checked = v.show_words;
+    $('reduceNoise').checked = v.reduce_noise;
     const sound = $('sound');
     sound.innerHTML = '';
     sound.append(new Option('Off', 'off'));
@@ -190,6 +198,7 @@
 
   $('enabled').onchange = e => invoke('set_enabled', { enabled: e.target.checked }).then(load);
   $('mic').onchange = e => invoke('set_microphone', { microphone: e.target.value || null });
+  $('reduceNoise').onchange = e => invoke('set_reduce_noise', { enabled: e.target.checked });
   $('showWords').onchange = e => invoke('set_show_words', { enabled: e.target.checked });
   $('background').onchange = e => invoke('set_background', { enabled: e.target.checked });
   $('autostart').onchange = e => invoke('set_start_with_windows', { enabled: e.target.checked })

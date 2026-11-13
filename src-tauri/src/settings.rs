@@ -83,6 +83,8 @@ pub struct Settings {
     pub background: bool,
     /// Show a faint trace of the words being heard inside the bubble's dot.
     pub show_words: bool,
+    /// Clean music and room noise out of the microphone before recognising it.
+    pub reduce_noise: bool,
     /// Custom words, one per line (see vocab.rs).
     pub vocabulary: String,
 }
@@ -99,6 +101,7 @@ impl Default for Settings {
             start_volume: 100,
             background: false,
             show_words: true,
+            reduce_noise: true,
             vocabulary: String::new(),
         }
     }
