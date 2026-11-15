@@ -18,8 +18,10 @@
     transform: translate(-50%, -50%) scale(var(--s)); transition: background .3s ease, border-color .3s ease; }
   .dot { width: 36px; height: 36px; transform: translate(-50%, -50%); background: var(--b); transition: background .3s ease; box-shadow: 0 0 6px rgba(0, 0, 0, .35);
     display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .words { max-width: 32px; font-size: 8px; line-height: 9px; text-align: center; color: rgba(255, 255, 255, .55);
-    overflow: hidden; word-break: break-all; max-height: 18px; transition: opacity .2s; }
+  .words { max-width: 34px; font-size: 10px; line-height: 12px; font-weight: 800; text-align: center; color: #fff; white-space: nowrap;
+    text-shadow: 0 0 2px #000, 0 0 2px #000, 1px 1px 1px #000, -1px -1px 1px #000; }
+  .words.pop { animation: pop .18s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
@@ -45,7 +47,14 @@
     { el: document.getElementById('w3'), rise: 0.12, fall: 0.2, wob: 0.14, hz: 3.1, base: 0.25, span: 0.45, v: 0 },
   ];
   const words = document.getElementById('words');
-  listen('words', e => { words.textContent = e.payload; });
+  // One word at a time, like an 8-ball: the newest, sized to fit the dot.
+  listen('words', e => {
+    const w = (e.payload.trim().split(/\s+/).pop() || '').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (w === words.textContent) return;
+    words.textContent = w;
+    words.style.fontSize = Math.max(6, Math.min(11, 56 / Math.max(w.length, 1))) + 'px';
+    words.classList.remove('pop'); void words.offsetWidth; if (w) words.classList.add('pop');
+  });
   function frame(t) {
     shown += (target - shown) * (target > shown ? 0.5 : 0.12);
     pill.style.setProperty('--lvl', shown.toFixed(3));

@@ -81,7 +81,7 @@ fn load() -> Option<OnlineRecognizer> {
     config.decoding_method = Some("greedy_search".into());
     config.enable_endpoint = true;
     config.rule1_min_trailing_silence = 2.4;
-    config.rule2_min_trailing_silence = 0.8;
+    config.rule2_min_trailing_silence = 1.2;
     config.rule3_min_utterance_length = 20.0;
     let started = Instant::now();
     let r = OnlineRecognizer::create(&config);
@@ -392,6 +392,10 @@ impl Session {
         if e <= a || words.is_empty() {
             return;
         }
+        // The second pass sometimes swallows a word the live pass heard ("hundred", "Remember").
+        // Keep those; a word it replaced or a repeat it removed still goes.
+        let live: Vec<String> = self.screen[a..e].iter().map(|t| t.raw.clone()).collect();
+        words = keep_dropped(&live, words);
 
         let render = |start: usize, words: &[String]| {
             let texts = self.writer_at(start).tokens(words, true);
@@ -473,6 +477,65 @@ impl Session {
         let segment = self.segment;
         self.screen.extend(words.into_iter().map(|(raw, text)| Token { raw, text, segment }));
     }
+}
+
+fn norm(w: &str) -> String {
+    w.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// Merges the accuracy pass (`new`) with what the live pass typed (`live`): where the new reading
+/// simply lacks words the live one had between two agreed words, those words are put back,
+/// unless they only repeat their neighbour.
+fn keep_dropped(live: &[String], new: Vec<String>) -> Vec<String> {
+    let l: Vec<String> = live.iter().map(|w| norm(w)).collect();
+    let n: Vec<String> = new.iter().map(|w| norm(w)).collect();
+    let (a, b) = (l.len(), n.len());
+    // Longest common subsequence table.
+    let mut t = vec![vec![0u16; b + 1]; a + 1];
+    for i in (0..a).rev() {
+        for j in (0..b).rev() {
+            t[i][j] = if l[i] == n[j] { t[i + 1][j + 1] + 1 } else { t[i + 1][j].max(t[i][j + 1]) };
+        }
+    }
+    let mut out = Vec::with_capacity(new.len());
+    let (mut i, mut j) = (0, 0);
+    while i < a || j < b {
+        if i < a && j < b && l[i] == n[j] {
+            out.push(new[j].clone());
+            i += 1;
+            j += 1;
+            continue;
+        }
+        // A gap: live words l[i..ci] against new words n[j..cj], up to the next agreed pair.
+        let (mut ci, mut cj) = (i, j);
+        while (ci < a || cj < b) && !(ci < a && cj < b && l[ci] == n[cj]) {
+            if cj >= b || (ci < a && t[ci + 1][cj] >= t[ci][cj + 1]) {
+                ci += 1;
+            } else {
+                cj += 1;
+            }
+        }
+        if cj == j && i > 0 && j > 0 && ci < a + 1 {
+            // Pure deletion in the middle: restore, except stuttered repeats.
+            for k in i..ci {
+                if l[k].is_empty() || (k > 0 && l[k] == l[k - 1]) || (k + 1 < a && l[k] == l[k + 1]) {
+                    continue;
+                }
+                out.push(live[k].clone());
+            }
+        } else if cj == j && i == 0 && j == 0 && ci > 0 && cj < b {
+            // Deleted from the very start.
+            for k in 0..ci {
+                if !l[k].is_empty() && !(k + 1 < a && l[k] == l[k + 1]) {
+                    out.push(live[k].clone());
+                }
+            }
+        }
+        out.extend(new[j..cj].iter().cloned());
+        i = ci;
+        j = cj;
+    }
+    out
 }
 
 /// The model needs a little trailing audio to settle its last word; without it the end is cut off.
@@ -598,6 +661,16 @@ fn asr_thread(rx: Receiver<Msg>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dropped_words_come_back() {
+        let v = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+        let j = |w: Vec<String>| w.join(" ");
+        assert_eq!(j(keep_dropped(&v("with over three hundred confirmed kills"), v("with over three confirmed kills"))), "with over three hundred confirmed kills");
+        assert_eq!(j(keep_dropped(&v("remember to run in a line"), v("To run in a line"))), "remember To run in a line");
+        assert_eq!(j(keep_dropped(&v("the the cat sat"), v("the cat sat"))), "the cat sat");
+        assert_eq!(j(keep_dropped(&v("could even"), v("Could even."))), "Could even.");
+        assert_eq!(j(keep_dropped(&v("did you just say"), v("did could you just say"))), "did could you just say");
+    }
     use super::*;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -745,6 +818,7 @@ mod tests {
             drain(&r, &s);
             result(&r, &s)
         };
+        let t0 = Instant::now();
         let clean = {
             d.reset();
             let mut out = Vec::new();
@@ -754,6 +828,7 @@ mod tests {
             out.extend(d.flush().samples);
             read(&out, d.sample_rate())
         };
+        println!("denoise + read took {} ms for {:.1} s of audio", t0.elapsed().as_millis(), n as f32 / rate);
         println!("clean speech:  {}", read(w.samples(), rate as i32));
         println!("with music:    {}", read(&mixed, rate as i32));
         println!("denoised:      {clean}");

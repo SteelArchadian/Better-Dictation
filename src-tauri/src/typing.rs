@@ -12,7 +12,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     GA_ROOT, GUITHREADINFO, GetAncestor, GetClassNameW, GetForegroundWindow, GetGUIThreadInfo, IsWindow,
-    PostMessageW, SendMessageW, WM_ACTIVATE, WM_CHAR, WM_KEYDOWN, WM_KEYUP,
+    PostMessageW, SendMessageW, WM_ACTIVATE, WM_CHAR, WM_KEYDOWN,
 };
 
 pub fn foreground() -> isize {
@@ -48,11 +48,18 @@ pub fn alive(target: isize) -> bool {
 /// (measured against a Chrome textarea), which showed up as doubled and missing letters.
 const POST_GAP: Duration = Duration::from_millis(20);
 
-fn post(hwnd: isize, msg: u32, w: usize, l: isize) {
+/// Backspaces are all identical, so none can be reordered into a wrong letter; they go faster.
+const BACK_GAP: Duration = Duration::from_millis(10);
+
+fn post_gap(hwnd: isize, msg: u32, w: usize, l: isize, gap: Duration) {
     unsafe {
         let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(w), LPARAM(l));
     }
-    std::thread::sleep(POST_GAP);
+    std::thread::sleep(gap);
+}
+
+fn post(hwnd: isize, msg: u32, w: usize, l: isize) {
+    post_gap(hwnd, msg, w, l, POST_GAP);
 }
 
 /// An unfocused Chromium window ignores posted characters until its top-level window has been told
@@ -68,8 +75,8 @@ fn wake(target: isize) {
 
 fn post_backspaces(hwnd: isize, n: usize) {
     for _ in 0..n {
-        post(hwnd, WM_KEYDOWN, VK_BACK.0 as usize, 0x000E_0001);
-        post(hwnd, WM_KEYUP, VK_BACK.0 as usize, 0xC00E_0001u32 as isize);
+        // Key-down alone deletes; skipping the key-up halves the time a rewrite takes.
+        post_gap(hwnd, WM_KEYDOWN, VK_BACK.0 as usize, 0x000E_0001, BACK_GAP);
     }
 }
 
@@ -160,5 +167,62 @@ pub fn type_text(text: &str) {
     let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
     if sent as usize != inputs.len() {
         crate::logger::log(&format!("typing blocked after {sent}/{} events (target may be elevated)", inputs.len()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, EnumWindows, GetWindowTextW};
+    use windows::core::BOOL;
+
+    unsafe extern "system" fn top(h: HWND, l: LPARAM) -> BOOL {
+        let mut b = [0u16; 512];
+        let n = unsafe { GetWindowTextW(h, &mut b) } as usize;
+        if String::from_utf16_lossy(&b[..n]).starts_with("BDTEST") {
+            unsafe { *(l.0 as *mut isize) = h.0 as isize };
+        }
+        BOOL(1)
+    }
+    unsafe extern "system" fn child(h: HWND, l: LPARAM) -> BOOL {
+        let mut b = [0u16; 64];
+        let n = unsafe { GetClassNameW(h, &mut b) } as usize;
+        if String::from_utf16_lossy(&b[..n]).starts_with("Chrome_RenderWidgetHostHWND") {
+            unsafe { *(l.0 as *mut isize) = h.0 as isize };
+        }
+        BOOL(1)
+    }
+    fn title(w: isize) -> String {
+        let mut b = [0u16; 1024];
+        let n = unsafe { GetWindowTextW(HWND(w as *mut _), &mut b) } as usize;
+        String::from_utf16_lossy(&b[..n]).trim_start_matches("BDTEST|").to_string()
+    }
+
+    /// Needs a page titled BDTEST|<textarea value> open in an Edge/Chrome app window.
+    #[test]
+    #[ignore]
+    fn fast_replace_in_chromium_is_exact() {
+        let (mut w, mut c) = (0isize, 0isize);
+        unsafe {
+            let _ = EnumWindows(Some(top), LPARAM(&mut w as *mut _ as isize));
+            let _ = EnumChildWindows(Some(HWND(w as *mut _)), Some(child), LPARAM(&mut c as *mut _ as isize));
+        }
+        assert!(c != 0, "no test window");
+        let settle = || std::thread::sleep(Duration::from_millis(400));
+        let mut shown = String::new();
+        for round in 0..6 {
+            let new = format!("{} round {round} the quick brown fox jumps over", "alpha beta gamma delta epsilon zeta eta theta");
+            let t0 = Instant::now();
+            replace_in(c, &shown, &new);
+            println!("round {round}: {} erased, {} ms", shown.chars().count() - shown.chars().zip(new.chars()).take_while(|(a, b)| a == b).count(), t0.elapsed().as_millis());
+            settle();
+            assert_eq!(title(w), new, "round {round}");
+            shown = new;
+        }
+        let t0 = Instant::now();
+        replace_in(c, &shown, "x");
+        println!("full wipe {} ms", t0.elapsed().as_millis());
+        settle();
+        assert_eq!(title(w), "x");
     }
 }
