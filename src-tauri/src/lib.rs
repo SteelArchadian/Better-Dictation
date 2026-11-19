@@ -71,7 +71,6 @@ struct SettingsView {
     start_sound: String,
     start_volume: u8,
     background: bool,
-    show_words: bool,
     reduce_noise: bool,
     sounds: Vec<&'static str>,
     vocabulary: String,
@@ -89,7 +88,6 @@ fn view(s: &Settings) -> SettingsView {
         start_sound: s.start_sound.clone(),
         start_volume: s.start_volume,
         background: s.background,
-        show_words: s.show_words,
         reduce_noise: s.reduce_noise,
         sounds: sound::NAMES.to_vec(),
         vocabulary: s.vocabulary.clone(),
@@ -119,12 +117,6 @@ fn bubble_trace(msg: String) {
 fn set_background(state: State<Shared>, enabled: bool) {
     hook::BACKGROUND.store(enabled, Ordering::SeqCst);
     state.update(|s| s.background = enabled);
-}
-
-#[tauri::command]
-fn set_show_words(state: State<Shared>, enabled: bool) {
-    overlay::SHOW_WORDS.store(enabled, Ordering::SeqCst);
-    state.update(|s| s.show_words = enabled);
 }
 
 #[tauri::command]
@@ -322,7 +314,6 @@ pub fn run() {
             set_start_sound,
             set_start_volume,
             set_background,
-            set_show_words,
             set_reduce_noise,
             set_vocabulary,
             set_start_with_windows,
@@ -351,7 +342,6 @@ pub fn run() {
             vocab::set(&s.vocabulary);
             hook::ENABLED.store(s.enabled, Ordering::SeqCst);
             hook::BACKGROUND.store(s.background, Ordering::SeqCst);
-            overlay::SHOW_WORDS.store(s.show_words, Ordering::SeqCst);
             asr::DENOISE.store(s.reduce_noise, Ordering::SeqCst);
             // Keeps the startup entry pointing at this copy (the app may have been moved or updated).
             if s.start_with_windows {

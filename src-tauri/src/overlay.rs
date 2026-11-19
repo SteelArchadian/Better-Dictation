@@ -2,7 +2,7 @@
 //! pass through, so keystrokes keep going to the app the user is dictating into.
 
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use windows::Win32::Foundation::{HWND, RECT};
@@ -15,16 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 const LABEL: &str = "bubble";
 
-/// Whether the dot shows a faint trace of the words being heard.
-pub static SHOW_WORDS: AtomicBool = AtomicBool::new(true);
 static APP: OnceLock<AppHandle> = OnceLock::new();
-
-/// Sends the words being heard right now (empty clears the dot).
-pub fn words(text: &str) {
-    if let Some(app) = APP.get() {
-        let _ = app.emit_to(LABEL, "words", if SHOW_WORDS.load(Ordering::SeqCst) { text } else { "" });
-    }
-}
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let _ = APP.set(app.clone());

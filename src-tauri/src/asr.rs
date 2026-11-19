@@ -309,8 +309,6 @@ impl Session {
     /// Types whatever has settled.
     fn update(&mut self, text: &str, now: Instant, flush: bool) {
         let out = self.step(text, now, flush);
-        let tail = self.prev.len().saturating_sub(2);
-        crate::overlay::words(&self.prev[tail..].join(" "));
         self.type_out(out);
     }
 

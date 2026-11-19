@@ -81,8 +81,6 @@ pub struct Settings {
     pub start_volume: u8,
     /// Keep typing into the window dictation started in, even after switching to another app.
     pub background: bool,
-    /// Show a faint trace of the words being heard inside the bubble's dot.
-    pub show_words: bool,
     /// Clean music and room noise out of the microphone before recognising it.
     pub reduce_noise: bool,
     /// Custom words, one per line (see vocab.rs).
@@ -100,7 +98,6 @@ impl Default for Settings {
             start_sound: "drop".into(),
             start_volume: 100,
             background: false,
-            show_words: true,
             reduce_noise: true,
             vocabulary: String::new(),
         }
